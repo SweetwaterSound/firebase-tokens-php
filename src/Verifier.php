@@ -6,6 +6,7 @@ use Firebase\Auth\Token\Domain\KeyStore;
 use Firebase\Auth\Token\Exception\ExpiredToken;
 use Firebase\Auth\Token\Exception\InvalidSignature;
 use Firebase\Auth\Token\Exception\InvalidToken;
+use Firebase\Auth\Token\Exception\InvalidTokenType;
 use Firebase\Auth\Token\Exception\IssuedInTheFuture;
 use Firebase\Auth\Token\Exception\UnknownKey;
 use Lcobucci\JWT\Parser;
@@ -39,6 +40,16 @@ final class Verifier implements Domain\Verifier
 
     public function verifyIdToken($token): Token
     {
+        return $this->runTokenVerification($token, 'idToken');
+    }
+
+    public function verifySessionCookie($token): Token
+    {
+        return $this->runTokenVerification($token, 'sessionCookie');
+    }
+
+    private function runTokenVerification($token, $type): Token
+    {
         if (!($token instanceof Token)) {
             $token = (new Parser())->parse($token);
         }
@@ -49,12 +60,21 @@ final class Verifier implements Domain\Verifier
             $this->verifyExpiry($token);
             $this->verifyAuthTime($token);
             $this->verifyIssuedAt($token);
-            $this->verifyIssuer($token);
+            switch ($type) {
+                case 'idToken':
+                    $this->verifyIdTokenIssuer($token);
+                    break;
+                case 'sessionCookie':
+                    $this->verifySessionCookieIssuer($token);
+                    break;
+                default:
+                    throw new InvalidTokenType($type);
+            }
         } catch (\Throwable $e) {
             $errorBeforeSignatureCheck = $e;
         }
 
-        $this->verifySignature($token, $this->getKey($token));
+        $this->verifySignature($token, $this->getKey($token, $type));
 
         if ($errorBeforeSignatureCheck) {
             throw $errorBeforeSignatureCheck;
@@ -96,18 +116,35 @@ final class Verifier implements Domain\Verifier
         }
     }
 
-    private function verifyIssuer(Token $token)
+    private function verifyIssuer(Token $token, $issuer)
     {
         if (!$token->hasClaim('iss')) {
             throw new InvalidToken($token, 'The claim "iss" is missing.');
         }
 
-        if ($token->getClaim('iss') !== sprintf('https://securetoken.google.com/%s', $this->projectId)) {
+        if ($token->getClaim('iss') !== $issuer)
+        {
             throw new InvalidToken($token, 'This token has an invalid issuer.');
         }
     }
 
-    private function getKey(Token $token): string
+    private function verifyIdTokenIssuer(Token $token)
+    {
+        $this->verifyIssuer(
+            $token,
+            sprintf('https://securetoken.google.com/%s', $this->projectId)
+        );
+    }
+
+    private function verifySessionCookieIssuer(Token $token)
+    {
+        $this->verifyIssuer(
+            $token,
+            sprintf('https://session.firebase.google.com/%s', $this->projectId)
+        );
+    }
+
+    private function getKey(Token $token, $type): string
     {
         if (!$token->hasHeader('kid')) {
             throw new InvalidToken($token, 'The header "kid" is missing.');
@@ -116,7 +153,7 @@ final class Verifier implements Domain\Verifier
         $keyId = $token->getHeader('kid');
 
         try {
-            return $this->keys->get($keyId);
+            return $this->keys->get($keyId, $type);
         } catch (\OutOfBoundsException $e) {
             throw new UnknownKey($keyId);
         }

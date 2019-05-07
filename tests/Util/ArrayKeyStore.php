@@ -13,12 +13,14 @@ class ArrayKeyStore implements KeyStore
         $this->keys = $keys;
     }
 
-    public function get($keyId)
+    public function get($keyId, $type = null)
     {
-        if (!array_key_exists($keyId, $this->keys)) {
+        $keys = $type ? $this->keys[$type] ?? [] : $this->keys;
+
+        if (!array_key_exists($keyId, $keys)) {
             throw new \OutOfBoundsException(sprintf('Key with ID "%s" not found.', $keyId));
         }
 
-        return $this->keys[$keyId];
+        return $keys[$keyId];
     }
 }

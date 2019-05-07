@@ -17,7 +17,7 @@ class HttpKeyStoreTest extends TestCase
     /**
      * @var array
      */
-    private static $liveKeys;
+    private static $liveKeys = [];
 
     /**
      * @var ClientInterface
@@ -31,7 +31,8 @@ class HttpKeyStoreTest extends TestCase
 
     public static function setUpBeforeClass()
     {
-        self::$liveKeys = json_decode(file_get_contents(HttpKeyStore::KEYS_URL), true);
+        self::$liveKeys['idToken'] = json_decode(file_get_contents(HttpKeyStore::ID_TOKEN_KEYS_URL), true);
+        self::$liveKeys['sessionCookie'] = json_decode(file_get_contents(HttpKeyStore::SESSION_COOKIE_KEYS_URL), true);
     }
 
     protected function setUp()
@@ -48,17 +49,29 @@ class HttpKeyStoreTest extends TestCase
             ->method('request')
             ->willReturn(new Response(200, [], '{"foo":"bar"}'));
 
-        $this->assertEquals('bar', $this->store->get('foo'));
+        $this->assertEquals('bar', $this->store->get('foo', 'idToken'));
     }
 
-    public function testGetKeyFromGoogle()
+    public function testGetIdTokenKeyFromGoogle()
     {
-        $keyId = array_rand(self::$liveKeys);
-        $key = self::$liveKeys[$keyId];
+        $keyId = array_rand(self::$liveKeys['idToken']);
+        $key = self::$liveKeys['idToken'][$keyId];
 
         $store = new HttpKeyStore();
 
-        $this->assertEquals($key, $store->get($keyId));
+        $this->assertEquals($key, $store->get($keyId, 'idToken'));
+    }
+
+    public function testGetSessionCookieKeyFromGoogle()
+    {
+        // Note: you cannot reliably compare the content of session cookie keys
+        // due to having multiple public keys per keyId
+
+        $keyId = array_rand(self::$liveKeys['sessionCookie']);
+
+        $store = new HttpKeyStore();
+
+        $this->assertNotEmpty($store->get($keyId, 'sessionCookie'));
     }
 
     public function testGetNonExistingKey()
@@ -69,19 +82,19 @@ class HttpKeyStoreTest extends TestCase
 
         $this->expectException(\OutOfBoundsException::class);
 
-        $this->store->get('foo');
+        $this->store->get('foo', 'idToken');
     }
 
     public function testGetKeyFromCache()
     {
         $this->cache->expects($this->once())
             ->method('get')
-            ->with('foo')
+            ->with('idToken::foo')
             ->willReturn('bar');
 
         $this->client->expects($this->never())
             ->method('request');
 
-        $this->assertSame('bar', $this->store->get('foo'));
+        $this->assertSame('bar', $this->store->get('foo', 'idToken'));
     }
 }

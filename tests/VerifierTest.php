@@ -33,7 +33,10 @@ class VerifierTest extends TestCase
 
     protected function setUp()
     {
-        $this->keyStore = new ArrayKeyStore(['valid_key_id' => 'valid_key']);
+        $this->keyStore = new ArrayKeyStore([
+            'idToken' => ['valid_key_id' => 'valid_key'],
+            'sessionCookie' => ['valid_key_id' => 'valid_key'],
+        ]);
 
         $this->signer = $this->createMockSigner();
 
@@ -53,6 +56,21 @@ class VerifierTest extends TestCase
             ->willReturn(true);
 
         $this->verifier->verifyIdToken($token);
+    }
+
+    /**
+     * @param Token $token
+     *
+     * @dataProvider validSessionCookieProvider
+     */
+    public function testItSucceedsWithAValidSessionCookie($token)
+    {
+        $this->signer
+            ->expects($this->once())
+            ->method('verify')
+            ->willReturn(true);
+
+        $this->verifier->verifySessionCookie($token);
     }
 
     /**
@@ -119,6 +137,21 @@ class VerifierTest extends TestCase
                 ->set('auth_time', time() - 1800)
                 ->setIssuedAt(time() - 10)
                 ->setIssuer('https://securetoken.google.com/project-id')
+                ->setHeader('kid', 'valid_key_id')
+                ->sign($this->createMockSigner(), 'valid_key')
+                ->getToken(),
+            ],
+        ];
+    }
+
+    public function validSessionCookieProvider()
+    {
+        return [
+            [(new Builder())
+                ->setExpiration(time() + 1800)
+                ->set('auth_time', time() - 1800)
+                ->setIssuedAt(time() - 10)
+                ->setIssuer('https://session.firebase.google.com/project-id')
                 ->setHeader('kid', 'valid_key_id')
                 ->sign($this->createMockSigner(), 'valid_key')
                 ->getToken(),

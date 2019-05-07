@@ -7,4 +7,6 @@ use Lcobucci\JWT\Token;
 interface Verifier
 {
     public function verifyIdToken($token): Token;
+
+    public function verifySessionCookie($token): Token;
 }

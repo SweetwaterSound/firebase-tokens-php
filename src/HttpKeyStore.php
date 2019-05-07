@@ -5,6 +5,7 @@ namespace Firebase\Auth\Token;
 use Fig\Http\Message\RequestMethodInterface as RequestMethod;
 use Firebase\Auth\Token\Cache\InMemoryCache;
 use Firebase\Auth\Token\Domain\KeyStore;
+use Firebase\Auth\Token\Exception\InvalidTokenType;
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
 use Psr\SimpleCache\CacheInterface;
@@ -14,8 +15,9 @@ use Psr\SimpleCache\CacheInterface;
  */
 final class HttpKeyStore implements KeyStore
 {
-    const KEYS_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
+    const ID_TOKEN_KEYS_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
 
+    const SESSION_COOKIE_KEYS_URL = 'https://www.googleapis.com/identitytoolkit/v3/relyingparty/publicKeys';
     /**
      * @var ClientInterface
      */
@@ -32,13 +34,26 @@ final class HttpKeyStore implements KeyStore
         $this->cache = $cache ?? new InMemoryCache();
     }
 
-    public function get($keyId)
+    public function get($keyId, $type)
     {
-        if ($key = $this->cache->get($keyId)) {
+        $cacheKey = "$type::$keyId";
+
+        if ($key = $this->cache->get($cacheKey)) {
             return $key;
         }
 
-        $response = $this->client->request(RequestMethod::METHOD_GET, self::KEYS_URL);
+        switch ($type) {
+            case 'idToken':
+                $keysUrl = self::ID_TOKEN_KEYS_URL;
+                break;
+            case 'sessionCookie':
+                $keysUrl = self::SESSION_COOKIE_KEYS_URL;
+                break;
+            default:
+                throw new InvalidTokenType($type);
+        }
+
+        $response = $this->client->request(RequestMethod::METHOD_GET, $keysUrl);
         $keys = json_decode((string) $response->getBody(), true);
 
         if (!($key = $keys[$keyId] ?? null)) {
@@ -49,7 +64,7 @@ final class HttpKeyStore implements KeyStore
             ? (int) $matches[1]
             : null;
 
-        $this->cache->set($keyId, $key, $ttl);
+        $this->cache->set($cacheKey, $key, $ttl);
 
         return $key;
     }

@@ -53,6 +53,14 @@ try {
 }
 ```
 
+### Verify a session cookie token
+
+Firebase's session cookie tokens must be verified using a separate method.
+
+```php
+$verifiedToken = $verifier->verifySessionCookie($token);
+``` 
+
 ### Cache results from the Google Secure Token Store
 
 In order to verify ID tokens, the verifier makes a call to fetch Firebase's currently available public
