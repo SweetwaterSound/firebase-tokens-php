@@ -1,0 +1,19 @@
+# PHP
+# Test and package your PHP project.
+# Add steps that run tests, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/php
+
+trigger:
+- master
+
+pool:
+  name: 'Test pool'
+
+container: php:7.2
+
+steps:
+- script: php -version
+  displayName: 'Check PHP version'
+
+- script: composer install --no-interaction --prefer-dist
+  displayName: 'composer install'
